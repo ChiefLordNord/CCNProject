@@ -11,7 +11,10 @@ posy = 500
 ballx = 0
 bally = 40
 
-nom_direction = 0
+is_game_start = False
+
+nom_direction_x = 0
+nom_direction_y = 0
 
 def GameThread():
     pygame.init()
@@ -27,9 +30,10 @@ def GameThread():
     # c1 = pygame.draw.circle(screen, (255, 0, 0), (10, 10), 25)
     # c2 = pygame.draw.circle(screen, (255, 0, 0), (10, 10), 25)
     # c3 = pygame.draw.circle(screen, (255, 0, 0), (10, 10), 25)
-    pygame.display.set_caption('Welcome to CCN games')
+    pygame.display.set_caption('Antonio and Joao epic baller ass game!')
 
     text_font = pygame.font.SysFont(None, 30)
+    text_font_large = pygame.font.SysFont(None, 40)
     background_img = pygame.image.load('background.jpg')
     background_img = pygame.transform.scale(background_img, (screen_width, screen_height))
 
@@ -46,10 +50,18 @@ def GameThread():
     global posy 
     global ballx
     global bally
-    global nom_direction
+    global nom_direction_x
+    global nom_direction_y
+    global is_game_start
     ballx = random.randint(0, screen_width)
 
     score = 0
+    
+    # read the best score
+    with open('best.txt', 'r') as f:
+        best_score = int(f.read())
+    
+    is_game_over = False
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -61,20 +73,51 @@ def GameThread():
         # draw candy
         screen.blit(candy_img, (ballx, bally))
         
-        bally += 5 + sqrt(score)
+        # if game has not started, balls won't move
+        if is_game_start:
+            bally += 5 + sqrt(score)
+        else:
+            start_msg = text_font_large.render(f'Press any key to start', True, (100, 157, 32))
+            screen.blit(start_msg, (screen_width//2 - 100, screen_height//2))
 
         if bally > screen_height:
-            bally = 0
-            ballx = random.randint(0, screen_width)
+            is_game_over = True
 
-        if nom_direction > 0:
+        # nom movement
+        if nom_direction_x > 0:
             posx += 5 + sqrt(score)
-        elif nom_direction < 0:
+        elif nom_direction_x < 0:
             posx -= 5 + sqrt(score)
+
+        if nom_direction_y > 0:
+            posy += 5 + sqrt(score)
+        elif nom_direction_y < 0:
+            posy -= 5 + sqrt(score)
+
+
+        # nom barrier
+        if posx < 0 or posx > screen_width - 100 or posy < 0 or posy > screen_height - 100:
+            nom_direction_x = 0
+            nom_direction_y = 0
 
         # current score
         score_board = text_font.render(f"Score: {score}", True, (0, 255, 0))
         screen.blit(score_board, (50, 50))
+
+        # current best score
+        best_board = text_font.render(f'Best: {best_score}', True, (0, 255, 0))
+        screen.blit(best_board, (500, 50))
+
+        if is_game_over:
+            game_over_msg = text_font.render(f'GAME OVER', True, (255, 0, 0))
+            screen.blit(game_over_msg, (screen_width//2 - 100, screen_height//2))
+
+            with open('best.txt', 'r') as f:
+                best_score = int(f.read())
+            
+            if best_score < score:
+                with open('best.txt', 'w') as f:
+                    f.write(str(score))
 
         # draw bucket
         screen.blit(nombucket_img, (posx, posy))
@@ -87,7 +130,7 @@ def GameThread():
         candy_mask = pygame.mask.from_surface(candy_img)
 
         if nom_mask.overlap(candy_mask, (nom_rect.left - candy_rect.left, nom_rect.top - candy_rect.top)):
-            ballx = random.randint(0, screen_width)
+            ballx = random.randint(0, screen_width-100)
             bally = 40
             score += 1
 
@@ -100,7 +143,9 @@ def GameThread():
 def ServerThread():
     global posy
     global posx
-    global nom_direction
+    global nom_direction_x
+    global nom_direction_y
+    global is_game_start
     # get the hostname
     host = socket.gethostbyname(socket.gethostname())
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -128,13 +173,23 @@ def ServerThread():
         
         print("from connected user: " + str(data))
         if(data == 'w'):
-            nom_direction = 0
+            nom_direction_y = -1
+            nom_direction_x = 0
         if(data == 's'):
-            nom_direction = 0
+            nom_direction_y = 1
+            nom_direction_x = 0
         if(data == 'a'):
-            nom_direction = -1
+            nom_direction_x = -1
+            nom_direction_y = 0
         if(data == 'd'):
-            nom_direction = 1
+            nom_direction_x = 1
+            nom_direction_y = 0
+        if(data == 'space'):
+            nom_direction_x = 0
+            nom_direction_y = 0
+
+        # start game on any key press
+        is_game_start = True
     conn.close()  # close the connection
 
 
@@ -142,3 +197,4 @@ t1 = threading.Thread(target=GameThread, args=[])
 t2 = threading.Thread(target=ServerThread, args=[])
 t1.start()
 t2.start()
+
